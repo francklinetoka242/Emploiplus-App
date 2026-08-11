@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Emploiplus-Job",
+    "slug": "emploiplus-job",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/Logo.png",
+    "scheme": "emploiplusreactnative",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/Logo.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.emploiplusreactnative"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/Logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#00000000",
+          "image": "./assets/images/Logo.png",
+          "imageWidth": 140,
+          "resizeMode": "contain",
+          "android": {
+            "backgroundColor": "#00000000",
+            "image": "./assets/images/Logo.png",
+            "imageWidth": 140,
+            "resizeMode": "contain"
+          },
+          "ios": {
+            "backgroundColor": "#00000000",
+            "image": "./assets/images/Logo.png",
+            "imageWidth": 140,
+            "resizeMode": "contain"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5c8d754b-873a-4f77-b000-d802a24a57e1"
+      }
+    }
+  }
+}
