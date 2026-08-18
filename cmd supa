@@ -1,0 +1,31 @@
+# Option 1: Déployer les 3 une par une (ce que tu as écrit)
+supabase functions deploy send-verification-code
+supabase functions deploy verify-code
+supabase functions deploy resend-verification-code
+
+# Option 2: Déployer toutes à la fois (plus rapide)
+supabase functions deploy
+
+
+
+✅ La stratégie recommandée
+1. Backend mobile dédié
+Créer un service séparé avec endpoints :
+
+    POST /api/mobile/register
+    POST /api/mobile/confirm
+    POST /api/mobile/resend
+    GET /api/mobile/health
+2. Même mécanisme que le site
+    HMAC token
+    code à 6 chiffres
+    expiration 20 min
+    limite de tentatives
+email avec lien deep link + code visible
+3. Mobile app
+    appelle uniquement ce backend mobile
+    reçoit l’ID utilisateur
+    ouvre l’écran de confirmation
+    accepte :
+    token depuis le deep link
+    code saisi manuellement

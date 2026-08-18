@@ -315,17 +315,28 @@ export default function JobApplyScreen() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-      const { error: mailError } = await supabase.functions.invoke('send-email', {
-        body: {
+      const mailResponse = await fetch('https://www.emploiplus-group.com/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           to: job.application_email,
           replyTo: email,
           subject,
+          template: 'job-application',
           text: message,
           html: `<p>${safeMessage}</p>`,
-          candidateId: candidate.id,
-          jobOfferId: job.id,
-        },
+          data: {
+            candidateId: candidate.id,
+            jobOfferId: job.id,
+            candidateName: candidate.first_name,
+            jobTitle: job.title,
+          },
+        }),
       });
+
+      const mailError = !mailResponse.ok ? new Error('Email send failed') : null;
 
       if (mailError) {
         Alert.alert('Candidature enregistrée', 'Votre candidature a été enregistrée, mais l’envoi du mail a échoué.');

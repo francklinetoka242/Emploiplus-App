@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npm install",
+  "env": [
+    "SUPABASE_URL",
+    "SUPABASE_KEY",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "JWT_SECRET",
+    "DEEP_LINK_URL"
+  ],
+  "functions": {
+    "src/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+}

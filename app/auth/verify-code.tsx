@@ -1,15 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function VerifyCodeScreen() {
@@ -17,12 +17,23 @@ export default function VerifyCodeScreen() {
   const params = useLocalSearchParams();
   const email = params?.email as string;
   const userId = params?.userId as string;
+  const tokenFromDeepLink = params?.token as string;
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes
   const [attemptsLeft, setAttemptsLeft] = useState(5);
+  const [autoVerified, setAutoVerified] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Auto-verify if deep link has token
+  useEffect(() => {
+    if (tokenFromDeepLink && !autoVerified && !loading) {
+      console.log('🔗 Deep link detected, attempting auto-verification...');
+      verifyWithToken(tokenFromDeepLink);
+      setAutoVerified(true);
+    }
+  }, [tokenFromDeepLink, autoVerified]);
 
   useEffect(() => {
     if (!email) {
@@ -53,15 +64,26 @@ export default function VerifyCodeScreen() {
   };
 
   const handleCodeChange = (index: number, value: string) => {
-    // Only allow numbers
-    if (!/^\d*$/.test(value)) return;
+    const sanitizedValue = value.replace(/\D/g, '');
+
+    if (sanitizedValue.length > 1) {
+      const pastedCode = sanitizedValue.slice(0, 6);
+      setCode(pastedCode);
+
+      const nextIndex = Math.min(pastedCode.length, 5);
+      setTimeout(() => {
+        inputRefs.current[nextIndex]?.focus();
+      }, 0);
+      return;
+    }
 
     const newCode = code.split('');
-    newCode[index] = value.charAt(0);
-    setCode(newCode.join(''));
+    newCode[index] = sanitizedValue.charAt(0) || '';
+    const nextCode = newCode.join('');
+    setCode(nextCode);
 
     // Auto-focus next input
-    if (value && index < 5) {
+    if (sanitizedValue && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -79,50 +101,38 @@ export default function VerifyCodeScreen() {
     }
   };
 
-  const handleVerifyCode = async () => {
-    if (code.length !== 6) {
-      Alert.alert('Code incomplet', 'Veuillez entrer les 6 chiffres du code.');
-      return;
-    }
-
+  // Verify with token (from deep link)
+  const verifyWithToken = async (token: string) => {
     setLoading(true);
 
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      console.log('🔐 Verifying with token...');
 
-      if (!supabaseUrl) {
-        throw new Error('SUPABASE_URL not configured');
-      }
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.emploiplus-group.com';
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/verify-code`, {
+      const confirmResponse = await fetch(`${apiBaseUrl}/api/mobile?action=confirm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          token,
           email,
-          code,
-          userId: userId || null,
+          userId,
         }),
       });
 
-      const data = await response.json();
+      console.log('Confirm response status:', confirmResponse.status);
 
-      if (!response.ok) {
-        if (data.attemptsRemaining !== undefined) {
-          setAttemptsLeft(data.attemptsRemaining);
-          Alert.alert(
-            'Code incorrect',
-            `Code invalide. ${data.attemptsRemaining} tentative${
-              data.attemptsRemaining > 1 ? 's' : ''
-            } restante${data.attemptsRemaining > 1 ? 's' : ''}.`,
-          );
-        } else {
-          Alert.alert('Erreur', data.error || 'Une erreur est survenue.');
-        }
-        setCode('');
+      if (!confirmResponse.ok) {
+        const errorData = await confirmResponse.json().catch(() => ({}));
+        console.error('Confirmation error:', errorData);
+        Alert.alert('Erreur', errorData.message || 'Token invalide ou expiré');
         return;
       }
+
+      const confirmData = await confirmResponse.json();
+      console.log('✅ Email verified successfully!');
 
       Alert.alert('Succès', 'Votre email a été confirmé avec succès!', [
         {
@@ -133,8 +143,74 @@ export default function VerifyCodeScreen() {
         },
       ]);
     } catch (error: any) {
-      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue lors de la vérification du code.');
-      console.error('Verify code error:', error);
+      console.error('Token verification error:', error);
+      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue lors de la vérification.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verify with code (manual entry)
+  const handleVerifyCode = async () => {
+    if (code.length !== 6) {
+      Alert.alert('Code incomplet', 'Veuillez entrer les 6 chiffres du code.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log('🔑 Verifying with code...');
+
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.emploiplus-group.com';
+
+      const confirmResponse = await fetch(`${apiBaseUrl}/api/mobile?action=confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          email,
+          userId,
+        }),
+      });
+
+      console.log('Confirm response status:', confirmResponse.status);
+
+      if (!confirmResponse.ok) {
+        const errorData = await confirmResponse.json().catch(() => ({}));
+        console.error('Confirmation error:', errorData);
+        
+        if (errorData.attemptsRemaining !== undefined) {
+          setAttemptsLeft(errorData.attemptsRemaining);
+          Alert.alert(
+            'Code incorrect',
+            `Code invalide. ${errorData.attemptsRemaining} tentative${
+              errorData.attemptsRemaining > 1 ? 's' : ''
+            } restante${errorData.attemptsRemaining > 1 ? 's' : ''}.`,
+          );
+        } else {
+          Alert.alert('Erreur', errorData.message || 'Code invalide ou expiré');
+        }
+        setCode('');
+        return;
+      }
+
+      const confirmData = await confirmResponse.json();
+      console.log('✅ Email verified successfully!');
+
+      Alert.alert('Succès', 'Votre email a été confirmé avec succès!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            router.replace('/auth/login' as any);
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Code verification error:', error);
+      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue lors de la vérification.');
     } finally {
       setLoading(false);
     }
@@ -144,33 +220,34 @@ export default function VerifyCodeScreen() {
     setLoading(true);
 
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      console.log('📧 Requesting new code...');
 
-      if (!supabaseUrl) {
-        throw new Error('SUPABASE_URL not configured');
-      }
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.emploiplus-group.com';
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/resend-verification-code`, {
+      const resendResponse = await fetch(`${apiBaseUrl}/api/mobile?action=resend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email,
-          userId: userId || null,
+          userId,
         }),
       });
 
-      const data = await response.json();
+      console.log('Resend response status:', resendResponse.status);
 
-      if (!response.ok) {
-        if (response.status === 429) {
+      if (!resendResponse.ok) {
+        const errorData = await resendResponse.json().catch(() => ({}));
+        console.error('Resend error:', errorData);
+        
+        if (resendResponse.status === 429) {
           Alert.alert(
             'Trop de demandes',
-            `Veuillez attendre ${data.retryAfter} secondes avant de demander un nouveau code.`,
+            `Veuillez attendre ${errorData.retryAfter} secondes avant de demander un nouveau code.`,
           );
         } else {
-          Alert.alert('Erreur', data.error || 'Une erreur est survenue.');
+          Alert.alert('Erreur', errorData.message || 'Impossible de renvoyer le code');
         }
         return;
       }
@@ -179,13 +256,12 @@ export default function VerifyCodeScreen() {
       setTimeLeft(1200);
       Alert.alert('Succès', 'Un nouveau code a été envoyé à votre email.');
     } catch (error: any) {
+      console.error('Resend error:', error);
       Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue lors du renvoi du code.');
-      console.error('Resend code error:', error);
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -195,54 +271,66 @@ export default function VerifyCodeScreen() {
         <Text style={styles.title}>Vérifier votre email</Text>
         <Text style={styles.subtitle}>Un code de vérification a été envoyé à {email}</Text>
 
+        {/* Loading indicator for auto-verification */}
+        {loading && tokenFromDeepLink && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color="#00009e" size="large" />
+            <Text style={styles.loadingText}>Vérification en cours...</Text>
+          </View>
+        )}
+
         {/* Code input fields */}
-        <View style={styles.codeContainer}>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <TextInput
-              key={index}
-              ref={(ref) => (inputRefs.current[index] = ref)}
-              style={[styles.codeInput, code.length === index && styles.codeInputFocused]}
-              value={code[index] || ''}
-              onChangeText={(value) => handleCodeChange(index, value)}
-              onKeyPress={(e) => handleKeyPress(index, e.nativeEvent.key)}
-              keyboardType="number-pad"
-              maxLength={1}
-              editable={!loading}
-              caretHidden
-              textAlign="center"
-            />
-          ))}
-        </View>
+        {!loading || !tokenFromDeepLink ? (
+          <>
+            <View style={styles.codeContainer}>
+              {Array.from({ length: 6 }).map((_, index) => (
+                <TextInput
+                  key={index}
+                  ref={(ref) => (inputRefs.current[index] = ref)}
+                  style={[styles.codeInput, code.length === index && styles.codeInputFocused]}
+                  value={code[index] || ''}
+                  onChangeText={(value) => handleCodeChange(index, value)}
+                  onKeyPress={(e) => handleKeyPress(index, e.nativeEvent.key)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  editable={!loading}
+                  caretHidden
+                  textAlign="center"
+                />
+              ))}
+            </View>
 
-        {/* Timer and attempts */}
-        <View style={styles.infoContainer}>
-          <Text style={[styles.timer, timeLeft < 300 && styles.timerWarning]}>
-            Expire dans: {formatTime(timeLeft)}
-          </Text>
-          <Text style={styles.attemptsText}>Tentatives restantes: {attemptsLeft}</Text>
-        </View>
+            {/* Timer and attempts */}
+            <View style={styles.infoContainer}>
+              <Text style={[styles.timer, timeLeft < 300 && styles.timerWarning]}>
+                Expire dans: {formatTime(timeLeft)}
+              </Text>
+              <Text style={styles.attemptsText}>Tentatives restantes: {attemptsLeft}</Text>
+            </View>
 
-        {/* Verify button */}
-        <TouchableOpacity
-          style={[styles.verifyButton, (loading || code.length !== 6) && styles.verifyButtonDisabled]}
-          onPress={handleVerifyCode}
-          disabled={loading || code.length !== 6}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.verifyButtonText}>Vérifier le code</Text>
-          )}
-        </TouchableOpacity>
+            {/* Verify button */}
+            <TouchableOpacity
+              style={[styles.verifyButton, (loading || code.length !== 6) && styles.verifyButtonDisabled]}
+              onPress={handleVerifyCode}
+              disabled={loading || code.length !== 6}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.verifyButtonText}>Vérifier le code</Text>
+              )}
+            </TouchableOpacity>
 
-        {/* Resend code button */}
-        <TouchableOpacity
-          style={styles.resendButton}
-          onPress={handleResendCode}
-          disabled={loading}
-        >
-          <Text style={styles.resendButtonText}>Renvoyer un code</Text>
-        </TouchableOpacity>
+            {/* Resend code button */}
+            <TouchableOpacity
+              style={styles.resendButton}
+              onPress={handleResendCode}
+              disabled={loading}
+            >
+              <Text style={styles.resendButtonText}>Renvoyer un code</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
 
         {/* Back to signup */}
         <TouchableOpacity
@@ -264,11 +352,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 8,
@@ -277,29 +365,35 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 32,
+    marginBottom: 28,
     textAlign: 'center',
   },
   codeContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 32,
+    justifyContent: 'space-between',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 320,
+    gap: 8,
+    marginBottom: 28,
+    paddingHorizontal: 8,
   },
   codeInput: {
-    width: 50,
-    height: 60,
+    flex: 1,
+    maxWidth: 42,
+    height: 54,
     borderWidth: 2,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '600',
-    color: '#00009e',
+    color: '#e8a900',
     textAlign: 'center',
+    backgroundColor: '#FFFFFF',
   },
   codeInputFocused: {
-    borderColor: '#00009e',
-    backgroundColor: '#F3F4FF',
+    borderColor: '#e8a900',
+    backgroundColor: '#fff8e8',
   },
   infoContainer: {
     alignItems: 'center',
@@ -353,5 +447,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     textDecorationLine: 'underline',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 48,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#00009e',
+    fontWeight: '500',
   },
 });

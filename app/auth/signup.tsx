@@ -1,17 +1,16 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { supabase } from '../../lib/supabase';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -55,75 +54,48 @@ export default function SignupScreen() {
     setLoading(true);
 
     try {
-      // 1. Create user in Supabase Auth without automatic email confirmation
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          emailRedirectTo: undefined,
-          data: {
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-          },
-        },
-      });
+      console.log('=== SIGNUP START ===');
+      console.log('Email:', normalizedEmail);
 
-      if (signUpError) {
-        if (signUpError.message?.includes('already registered') || signUpError.message?.includes('User already exists')) {
-          throw new Error('Un compte existe déjà pour cette adresse e-mail.');
-        }
-        throw signUpError;
-      }
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.emploiplus-group.com';
 
-      const userId = authData?.user?.id;
-      if (!userId) {
-        throw new Error('USER_NOT_CREATED');
-      }
-
-      // 2. Create candidate profile
-      const { error: candidateError } = await supabase.from('candidates').insert({
-        user_id: userId,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        email: normalizedEmail,
-        status: 'active',
-      });
-
-      if (candidateError) {
-        throw candidateError;
-      }
-
-      // 3. Sign out the session if exists
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        await supabase.auth.signOut();
-      }
-
-      // 4. Call function to send verification code
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('SUPABASE_URL not configured');
-      }
-
-      const sendCodeResponse = await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
+      // 1. Call the dedicated mobile backend endpoint
+      console.log('Step 1: Calling mobile register endpoint...');
+      const registerResponse = await fetch(`${apiBaseUrl}/api/mobile?action=register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email: normalizedEmail,
-          userId,
+          password,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          confirmationRedirect: 'emploiplus://confirm',
         }),
       });
 
-      if (!sendCodeResponse.ok) {
-        const errorData = await sendCodeResponse.json().catch(() => ({}));
-        console.warn('Error sending verification code:', errorData);
+      console.log('Register response status:', registerResponse.status);
+
+      if (!registerResponse.ok) {
+        const errorData = await registerResponse.json().catch(() => ({}));
+        console.error('Register error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Erreur lors de l\'inscription');
       }
 
-      // 5. Redirect to code verification screen
+      const registerData = await registerResponse.json();
+      console.log('Register response:', registerData);
+
+      const userId = registerData.userId || registerData.user?.id;
+
+      if (!userId) {
+        throw new Error('Données de confirmation incomplètes reçues du serveur');
+      }
+
+      console.log('✅ User registered successfully with ID:', userId);
+      console.log('📧 Verification email sent to:', normalizedEmail);
+
+      console.log('Step 2: Redirecting to verify-code screen...');
       router.replace({
         pathname: '/auth/verify-code' as any,
         params: {
@@ -132,8 +104,8 @@ export default function SignupScreen() {
         },
       });
     } catch (error: any) {
+      console.error('=== SIGNUP ERROR ===', error);
       Alert.alert('Inscription impossible', error?.message ?? 'Une erreur est survenue pendant l\'inscription.');
-      console.error('Signup error:', error);
     } finally {
       setLoading(false);
     }

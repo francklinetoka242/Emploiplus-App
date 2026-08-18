@@ -86,16 +86,20 @@ serve(async (req) => {
       throw insertError;
     }
 
-    // Send email with code
-    const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+    // Send email with code via Node.js endpoint
+    const emailResponse = await fetch('https://www.emploiplus-group.com/api/send-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${supabaseServiceKey}`,
       },
       body: JSON.stringify({
         to: email,
         subject: 'Nouveau code de vérification EmploiPlus',
+        template: 'verification-code',
+        data: {
+          code,
+          expiresInMinutes: 20,
+        },
         html: `
           <!DOCTYPE html>
           <html>
