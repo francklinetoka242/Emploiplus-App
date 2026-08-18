@@ -1,17 +1,16 @@
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 
 export default function SignupScreen() {
@@ -56,13 +55,12 @@ export default function SignupScreen() {
     setLoading(true);
 
     try {
-      const redirectUrl = Linking.createURL('/auth/confirm-email');
-
+      // 1. Create user in Supabase Auth without automatic email confirmation
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
         options: {
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: undefined,
           data: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
@@ -71,6 +69,9 @@ export default function SignupScreen() {
       });
 
       if (signUpError) {
+        if (signUpError.message?.includes('already registered') || signUpError.message?.includes('User already exists')) {
+          throw new Error('Un compte existe déjà pour cette adresse e-mail.');
+        }
         throw signUpError;
       }
 
@@ -79,6 +80,7 @@ export default function SignupScreen() {
         throw new Error('USER_NOT_CREATED');
       }
 
+      // 2. Create candidate profile
       const { error: candidateError } = await supabase.from('candidates').insert({
         user_id: userId,
         first_name: firstName.trim(),
@@ -91,6 +93,7 @@ export default function SignupScreen() {
         throw candidateError;
       }
 
+      // 3. Sign out the session if exists
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -98,18 +101,39 @@ export default function SignupScreen() {
         await supabase.auth.signOut();
       }
 
-      Alert.alert(
-        'Inscription réussie',
-        'Un email de confirmation vient de vous être envoyé. Veuillez le valider avant de vous connecter.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/auth/login' as any),
-          },
-        ]
-      );
+      // 4. Call function to send verification code
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error('SUPABASE_URL not configured');
+      }
+
+      const sendCodeResponse = await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          userId,
+        }),
+      });
+
+      if (!sendCodeResponse.ok) {
+        const errorData = await sendCodeResponse.json().catch(() => ({}));
+        console.warn('Error sending verification code:', errorData);
+      }
+
+      // 5. Redirect to code verification screen
+      router.replace({
+        pathname: '/auth/verify-code' as any,
+        params: {
+          email: normalizedEmail,
+          userId,
+        },
+      });
     } catch (error: any) {
-      Alert.alert('Inscription impossible', error?.message ?? 'Une erreur est survenue pendant l’inscription.');
+      Alert.alert('Inscription impossible', error?.message ?? 'Une erreur est survenue pendant l\'inscription.');
+      console.error('Signup error:', error);
     } finally {
       setLoading(false);
     }
@@ -163,11 +187,11 @@ export default function SignupScreen() {
             <View style={[styles.checkboxBox, agreeTerms && styles.checkboxBoxChecked]}>
               {agreeTerms && <Text style={styles.checkmark}>✓</Text>}
             </View>
-            <Text style={styles.checkboxText}>J’accepte les conditions générales.</Text>
+            <Text style={styles.checkboxText}>J'accepte les conditions générales.</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.primaryButton, loading && styles.disabledButton]} onPress={handleSignUp} disabled={loading}>
-            <Text style={styles.primaryButtonText}>{loading ? 'Inscription...' : 'S’inscrire'}</Text>
+            <Text style={styles.primaryButtonText}>{loading ? 'Inscription...' : 'S\'inscrire'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -250,10 +274,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    marginTop: 12,
+    marginTop: 20,
   },
   disabledButton: {
-    opacity: 0.7,
+    backgroundColor: '#d1d5db',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -261,8 +285,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   footerText: {
-    textAlign: 'center',
-    color: '#374151',
     marginTop: 20,
+    textAlign: 'center',
+    color: '#00009e',
+    textDecorationLine: 'underline',
   },
 });

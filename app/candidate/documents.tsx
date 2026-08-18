@@ -28,6 +28,7 @@ import {
     type CandidateDocumentRecord,
     type CandidateDocumentTypeKey,
 } from '../../lib/candidate-documents';
+import { clearCandidateProfileCache } from '../../lib/candidate-profile';
 import { debugDuplicateKeys, debugExactUuidInList } from '../../lib/debug-duplicate-keys';
 
 const formatBytes = (bytes?: number) => {
@@ -72,10 +73,10 @@ export default function CandidateDocumentsScreen() {
     });
   };
 
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (forceRefresh = false) => {
     try {
       setError(null);
-      const data = await listCandidateDocuments();
+      const data = await listCandidateDocuments(forceRefresh);
       setDocuments(data);
     } catch (_error) {
       setError('Impossible de charger vos documents.');
@@ -89,9 +90,10 @@ export default function CandidateDocumentsScreen() {
     loadDocuments();
   }, [loadDocuments]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    loadDocuments();
+    await clearCandidateProfileCache();
+    await loadDocuments(true);
   };
 
   const stats = useMemo(() => {

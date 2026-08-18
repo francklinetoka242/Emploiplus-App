@@ -1,23 +1,22 @@
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  fetchMyApplicationsForCandidate,
-  formatDate,
-  getConnectedCandidate,
-  isNetworkError,
-  type JobApplicationRecord,
-} from '../../../lib/jobs';
 import { debugDuplicateKeys, debugExactUuidInList } from '../../../lib/debug-duplicate-keys';
+import {
+    fetchMyApplicationsForCandidate,
+    formatDate,
+    getConnectedCandidate,
+    isNetworkError
+} from '../../../lib/jobs';
 
 const STATUS_LABELS: Record<string, string> = {
   submitted: 'Soumise',
@@ -74,6 +73,8 @@ export default function CandidateApplicationsScreen() {
   debugDuplicateKeys('CandidateApplicationsScreen', 'applications', applications, (application) => application?.id);
   debugExactUuidInList('CandidateApplicationsScreen', 'applications', applications, (application) => application?.id, 'f4f29e28-f276-40e4-bbfa-553acd7cdf94');
 
+  const recentApplications = applications.slice(0, 5);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -89,6 +90,9 @@ export default function CandidateApplicationsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Mes candidatures</Text>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>ℹ Après 30 jours, vos candidatures sont automatiquement supprimées de cette page.</Text>
+        </View>
       </View>
 
       {error ? (
@@ -111,12 +115,12 @@ export default function CandidateApplicationsScreen() {
         </View>
       ) : null}
 
-      {!error && applications.length > 0 ? (
+      {!error && recentApplications.length > 0 ? (
         <ScrollView
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#00009e" />}
         >
-          {applications.map((application) => {
+          {recentApplications.map((application) => {
             const offer = application.offer;
             return (
               <TouchableOpacity
@@ -169,6 +173,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 12,
+  },
+  infoBox: {
+    marginTop: 12,
+    backgroundColor: '#dbeafe',
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0284c7',
+    padding: 10,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#0c4a6e',
+    lineHeight: 18,
   },
   title: {
     fontSize: 28,

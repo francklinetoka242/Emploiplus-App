@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { logSourceData } from './debug-duplicate-keys';
 export { mergeUniqueJobOffers } from './job-offers-merge.ts';
 
 export type JobOffer = {
@@ -51,6 +50,7 @@ export type CandidateSavedOfferRecord = {
 };
 
 export const JOBS_PAGE_SIZE = 10;
+export const MAX_SAVED_OFFERS = 5;
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) {
@@ -124,7 +124,8 @@ export async function fetchSavedOffersForCandidate(candidateId: string) {
     .from('candidate_saved_offers')
     .select('id, candidate_id, job_offer_id, saved_at')
     .eq('candidate_id', candidateId)
-    .order('saved_at', { ascending: false, nullsFirst: false });
+    .order('saved_at', { ascending: false, nullsFirst: false })
+    .limit(MAX_SAVED_OFFERS);
 
   return {
     data: (data ?? []) as CandidateSavedOfferRecord[],
@@ -162,6 +163,19 @@ export async function toggleSavedOfferForCandidate(candidateId: string, jobOffer
       throw error;
     }
     return { saved: false, error: null };
+  }
+
+  const { count, error: countError } = await supabase
+    .from('candidate_saved_offers')
+    .select('id', { count: 'exact', head: true })
+    .eq('candidate_id', candidateId);
+
+  if (countError) {
+    throw countError;
+  }
+
+  if ((count ?? 0) >= MAX_SAVED_OFFERS) {
+    throw new Error('MAX_SAVED_OFFERS_REACHED');
   }
 
   const { error } = await supabase.from('candidate_saved_offers').insert({
@@ -283,7 +297,8 @@ export async function fetchMyApplicationsForCandidate(candidateId: string) {
     .from('job_applications')
     .select('id, candidate_id, job_offer_id, status, applied_at, updated_at')
     .eq('candidate_id', candidateId)
-    .order('applied_at', { ascending: false, nullsFirst: false });
+    .order('applied_at', { ascending: false, nullsFirst: false })
+    .limit(5);
 
   if (error) {
     return { data: [], error };

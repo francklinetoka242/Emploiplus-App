@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { logSourceData } from './debug-duplicate-keys';
 
 export type NotificationRow = {
   id: string;
@@ -7,10 +6,12 @@ export type NotificationRow = {
   type?: string | null;
   title?: string | null;
   content?: string | null;
+  body?: string | null;
   status?: string | null;
   is_read?: boolean | null;
   created_at?: string | null;
   link?: string | null;
+  read_at?: string | null;
 };
 
 export async function getCurrentUserId(): Promise<string> {
@@ -26,13 +27,15 @@ export async function getCurrentUserId(): Promise<string> {
   return user.id;
 }
 
-export async function fetchCandidateNotifications(limit = 10): Promise<NotificationRow[]> {
+export async function fetchCandidateNotifications(limit = 50): Promise<NotificationRow[]> {
   const userId = await getCurrentUserId();
 
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, user_id, type, title, content, status, is_read, created_at, link')
-    .eq('user_id', userId)
+    .select('id, user_id, type, title, body, content, status, is_read, created_at, link, read_at')
+    .eq('status', 'active')
+    .in('type', ['admin', 'offre'])
+    .or(`user_id.is.null,user_id.eq.${userId}`)
     .order('created_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
@@ -41,13 +44,20 @@ export async function fetchCandidateNotifications(limit = 10): Promise<Notificat
   }
 
   const result = (data ?? []) as NotificationRow[];
-  return result;
+  return normalizeNotifications(result);
+}
+
+function normalizeNotifications(notifications: NotificationRow[]): NotificationRow[] {
+  return notifications.map((notif) => ({
+    ...notif,
+    content: notif.content || notif.body,
+  }));
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true, status: 'masked' })
+    .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('id', notificationId);
 
   if (error) {
@@ -60,9 +70,20 @@ export async function markAllNotificationsAsRead(): Promise<void> {
 
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true, status: 'masked' })
+    .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('is_read', false);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId);
 
   if (error) {
     throw error;

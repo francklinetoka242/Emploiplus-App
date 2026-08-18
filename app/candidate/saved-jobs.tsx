@@ -1,17 +1,17 @@
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
-import { fetchSavedOffersForCandidate, getConnectedCandidate, type JobOffer } from '../../lib/jobs';
 import { debugDuplicateKeys, debugExactUuidInList } from '../../lib/debug-duplicate-keys';
+import { fetchSavedOffersForCandidate, getConnectedCandidate, MAX_SAVED_OFFERS, type JobOffer } from '../../lib/jobs';
+import { supabase } from '../../lib/supabase';
 
 export default function CandidateSavedJobsScreen() {
   const router = useRouter();
@@ -73,6 +73,9 @@ export default function CandidateSavedJobsScreen() {
   debugDuplicateKeys('CandidateSavedJobsScreen', 'jobs', jobs, (job) => job?.id);
   debugExactUuidInList('CandidateSavedJobsScreen', 'jobs', jobs, (job) => job?.id, 'f4f29e28-f276-40e4-bbfa-553acd7cdf94');
 
+  const displayedJobs = jobs.slice(0, MAX_SAVED_OFFERS);
+  const isAtMaxCapacity = jobs.length >= MAX_SAVED_OFFERS;
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -99,19 +102,25 @@ export default function CandidateSavedJobsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Offres enregistrées</Text>
         <Text style={styles.subtitle}>Retrouvez les offres que vous avez sauvegardées.</Text>
+        {isAtMaxCapacity && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>Limite d'enregistrement atteinte</Text>
+            <Text style={styles.warningText}>Vous ne pouvez pas enregistrer plus de 5 offres. Veuillez supprimer des offres enregistrées existantes afin de les remplacer.</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#00009e" />}
       >
-        {jobs.length === 0 ? (
+        {displayedJobs.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Aucune offre enregistrée</Text>
             <Text style={styles.emptyText}>Enregistrez des offres depuis la liste des emplois pour les retrouver ici.</Text>
           </View>
         ) : (
-          jobs.map((job) => (
+          displayedJobs.map((job) => (
             <TouchableOpacity
               key={job.id}
               style={styles.jobCard}
@@ -148,6 +157,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#4b5563',
     fontSize: 14,
+  },
+  warningBox: {
+    marginTop: 16,
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc2626',
+    padding: 12,
+  },
+  warningTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#991b1b',
+  },
+  warningText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#7f1d1d',
+    lineHeight: 18,
   },
   content: {
     paddingHorizontal: 20,

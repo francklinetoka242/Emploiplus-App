@@ -1,33 +1,33 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../../../lib/supabase';
+import { debugDuplicateKeys, debugExactUuidInList } from '../../../lib/debug-duplicate-keys';
 import {
-  JOBS_PAGE_SIZE,
-  fetchJobFilterOptions,
-  fetchJobOffers,
-  formatDate,
-  formatSalary,
-  getConnectedCandidate,
-  isNetworkError,
-  mergeUniqueJobOffers,
-  toggleSavedOfferForCandidate,
-  type JobOffer,
+    fetchJobFilterOptions,
+    fetchJobOffers,
+    formatDate,
+    formatSalary,
+    getConnectedCandidate,
+    isNetworkError,
+    JOBS_PAGE_SIZE,
+    mergeUniqueJobOffers,
+    toggleSavedOfferForCandidate,
+    type JobOffer
 } from '../../../lib/jobs';
 import { readPageCache, writePageCache } from '../../../lib/session-page-cache';
-import { debugDuplicateKeys, debugExactUuidInList } from '../../../lib/debug-duplicate-keys';
+import { supabase } from '../../../lib/supabase';
 
 type JobsCacheState = {
   jobs: JobOffer[];
@@ -254,6 +254,8 @@ export default function CandidateJobsScreen() {
       const message = String(error?.message ?? '').toLowerCase();
       if (message.includes('network') || message.includes('failed to fetch')) {
         Alert.alert('Connexion', 'Vérifiez votre connexion et réessayez.');
+      } else if (error?.message === 'MAX_SAVED_OFFERS_REACHED' || message.includes('max_saved_offers_reached')) {
+        Alert.alert('Limite atteinte', 'Vous ne pouvez pas enregistrer plus de 5 offres. Veuillez supprimer une offre enregistrée existante afin de la remplacer.');
       } else {
         Alert.alert('Erreur', 'L’offre n’a pas pu être enregistrée.');
       }

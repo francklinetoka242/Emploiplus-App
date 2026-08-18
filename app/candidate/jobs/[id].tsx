@@ -1,30 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  fetchJobById,
-  formatDate,
-  formatSalary,
-  getConnectedCandidate,
-  getSavedOfferForCandidate,
-  hasExistingApplication,
-  isNetworkError,
-  toggleSavedOfferForCandidate,
-  type JobOffer,
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { debugDuplicateKeys, debugExactUuidInList } from '../../../lib/debug-duplicate-keys';
+import {
+    fetchJobById,
+    fetchSavedOffersForCandidate,
+    formatDate,
+    formatSalary,
+    getConnectedCandidate,
+    getSavedOfferForCandidate,
+    hasExistingApplication,
+    isNetworkError,
+    MAX_SAVED_OFFERS,
+    toggleSavedOfferForCandidate,
+    type JobOffer,
 } from '../../../lib/jobs';
 import { supabase } from '../../../lib/supabase';
 import { CvJobAnalysisSection } from '../../components/CvJobAnalysisSection';
-import { debugDuplicateKeys, debugExactUuidInList } from '../../../lib/debug-duplicate-keys';
 
 const normalizePhoneNumber = (value?: string | null) => {
   if (!value) {
@@ -225,12 +227,21 @@ export default function JobDetailScreen() {
         return;
       }
 
+      const { data: savedOffers = [] } = await fetchSavedOffersForCandidate(candidate.id);
+      const alreadySaved = savedOffers.some((offer) => offer.job_offer_id === job.id);
+      if (!alreadySaved && savedOffers.length >= MAX_SAVED_OFFERS) {
+        Alert.alert('Limite atteinte', 'Vous ne pouvez pas enregistrer plus de 5 offres. Veuillez supprimer une offre enregistrée existante afin de la remplacer.');
+        return;
+      }
+
       const { saved: nextSaved } = await toggleSavedOfferForCandidate(candidate.id, job.id);
       setSaved(nextSaved);
     } catch (saveError: any) {
       const message = String(saveError?.message ?? '').toLowerCase();
       if (message.includes('network') || message.includes('failed to fetch')) {
         Alert.alert('Connexion', 'Vérifiez votre connexion et réessayez.');
+      } else if (saveError?.message === 'MAX_SAVED_OFFERS_REACHED' || message.includes('max_saved_offers_reached')) {
+        Alert.alert('Limite atteinte', 'Vous ne pouvez pas enregistrer plus de 5 offres. Veuillez supprimer une offre enregistrée existante afin de la remplacer.');
       } else {
         Alert.alert('Erreur', 'L’offre n’a pas pu être enregistrée.');
       }

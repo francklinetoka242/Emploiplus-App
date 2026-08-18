@@ -1,25 +1,25 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { saveCandidateProfile } from '../../../../lib/candidate-profile';
 import { listCandidateDocuments } from '../../../../lib/candidate-documents';
+import { saveCandidateProfile } from '../../../../lib/candidate-profile';
+import { debugDuplicateKeys, debugExactUuidInList } from '../../../../lib/debug-duplicate-keys';
 import { fetchJobById, getConnectedCandidate, hasExistingApplication, type JobOffer } from '../../../../lib/jobs';
 import { supabase } from '../../../../lib/supabase';
-import { debugDuplicateKeys, debugExactUuidInList } from '../../../../lib/debug-duplicate-keys';
 
 type CandidateFormProfile = {
   id: string;
@@ -62,8 +62,6 @@ export default function JobApplyScreen() {
   const [selectedTemporaryDocuments, setSelectedTemporaryDocuments] = useState<Set<string>>(new Set());
   const [savedDocuments, setSavedDocuments] = useState<any[]>([]);
   const [temporaryDocuments, setTemporaryDocuments] = useState<TemporaryDocument[]>([]);
-  const [cvOptions, setCvOptions] = useState<Array<{ id: string; name: string; url?: string; source: 'saved' | 'temp'; size?: number; mimeType?: string }>>([]);
-  const [selectedCvUrl, setSelectedCvUrl] = useState<string | null>(null);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   const totalDocuments = selectedDocuments.size + selectedTemporaryDocuments.size;
@@ -100,18 +98,6 @@ export default function JobApplyScreen() {
         setPhone(currentCandidate.phone ?? '');
         setHeadline(currentCandidate.headline ?? '');
         setEmail(currentCandidate.email ?? '');
-
-        const savedCvOption = currentCandidate.cv_url
-          ? [{
-              id: 'saved-cv',
-              name: currentCandidate.cv_url.split('/').pop() || 'CV enregistré',
-              url: currentCandidate.cv_url,
-              source: 'saved' as const,
-            }]
-          : [];
-
-        setCvOptions(savedCvOption);
-        setSelectedCvUrl(currentCandidate.cv_url ?? null);
 
         try {
           const documents = await listCandidateDocuments();
@@ -242,46 +228,6 @@ export default function JobApplyScreen() {
       return next;
     });
   };
-
-  const handleAddCv = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets?.[0]) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      const size = asset.size ?? 0;
-      if ((asset.mimeType ?? 'application/pdf').toLowerCase() !== 'application/pdf') {
-        Alert.alert('CV', 'Seuls les fichiers PDF sont acceptés pour le CV.');
-        return;
-      }
-
-      if (size > 2 * 1024 * 1024) {
-        Alert.alert('CV', 'Le CV doit faire moins de 2 MB.');
-        return;
-      }
-
-      const item = {
-        id: `${Date.now()}-${Math.random()}`,
-        name: asset.name ?? 'cv.pdf',
-        url: asset.uri,
-        source: 'temp' as const,
-        size,
-        mimeType: asset.mimeType ?? 'application/pdf',
-      };
-
-      setCvOptions((prev) => [...prev, item]);
-      setSelectedCvUrl(item.url ?? null);
-    } catch (error: any) {
-      Alert.alert('CV', error?.message ?? 'Le CV n’a pas pu être ajouté.');
-    }
-  };
-
   const validate = () => {
     if (!candidate) {
       Alert.alert('Authentification', 'Veuillez vous reconnecter.');
@@ -400,10 +346,8 @@ export default function JobApplyScreen() {
     }
   };
 
-  debugDuplicateKeys('JobApplyScreen', 'cvOptions', cvOptions, (item) => item?.id ?? item?.name);
   debugDuplicateKeys('JobApplyScreen', 'savedDocuments', savedDocuments, (item) => item?.id ?? item?.name ?? item?.path ?? item?.storagePath);
   debugDuplicateKeys('JobApplyScreen', 'temporaryDocuments', temporaryDocuments, (item) => item?.id ?? item?.name);
-  debugExactUuidInList('JobApplyScreen', 'cvOptions', cvOptions, (item) => item?.id ?? item?.name, 'f4f29e28-f276-40e4-bbfa-553acd7cdf94');
   debugExactUuidInList('JobApplyScreen', 'savedDocuments', savedDocuments, (item) => item?.id ?? item?.name ?? item?.path ?? item?.storagePath, 'f4f29e28-f276-40e4-bbfa-553acd7cdf94');
   debugExactUuidInList('JobApplyScreen', 'temporaryDocuments', temporaryDocuments, (item) => item?.id ?? item?.name, 'f4f29e28-f276-40e4-bbfa-553acd7cdf94');
 
@@ -454,37 +398,6 @@ export default function JobApplyScreen() {
             <Text style={styles.offerBadge}>Votre candidature</Text>
             <Text style={styles.offerTitle}>{job.title ?? 'Offre'}</Text>
             <Text style={styles.companyText}>{job.company ?? 'Entreprise non renseignée'}</Text>
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>CV à utiliser</Text>
-            {cvOptions.length === 0 ? (
-              <Text style={styles.emptySubtle}>Aucun CV enregistré pour le moment.</Text>
-            ) : (
-              cvOptions.map((cv, index) => {
-                const selected = selectedCvUrl === cv.url;
-                return (
-                  <TouchableOpacity
-                    key={`${cv.source}-${cv.id ?? cv.name ?? index}`}
-                    style={[styles.documentRow, selected && styles.documentRowSelected]}
-                    onPress={() => setSelectedCvUrl(cv.url ?? null)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[styles.documentCheckBox, selected && styles.documentCheckBoxSelected]}>
-                      {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
-                    </View>
-                    <View style={styles.documentInfo}>
-                      <Text style={styles.documentName}>{cv.name}</Text>
-                      <Text style={styles.documentMeta}>{cv.source === 'saved' ? 'CV enregistré' : 'CV ajouté pour cette candidature'}</Text>
-                      {cv.size ? <Text style={styles.documentMeta}>{Math.max(1, Math.round(cv.size / 1024))} KB</Text> : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleAddCv}>
-              <Text style={styles.secondaryButtonText}>Ajouter un autre CV</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.sectionCard}>
