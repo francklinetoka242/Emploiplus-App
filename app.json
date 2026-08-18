@@ -44,17 +44,24 @@
             "resizeMode": "contain"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "splash": {
+      "image": "./assets/images/Logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "extra": {
       "router": {},
       "eas": {
         "projectId": "5c8d754b-873a-4f77-b000-d802a24a57e1"
-      }
+      },
+      "EXPO_PUBLIC_API_URL": "https://api.example.com"
     }
   }
 }
